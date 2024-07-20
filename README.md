@@ -1,68 +1,201 @@
-![Meteora](thumbnail.png)
+# ContextAPI, Reducer e Hooks
 
-# Meteora - E-commerce de Moda
+## Carrinho de Compras
 
-O Meteora é um projeto de e-commerce em fase de desenvolvimento inicial. Este README fornece informações sobre o projeto, suas funcionalidades e como executá-lo em seu ambiente local.
+O objetivo deste projeto não foi desenvolver uma aplicação completa, mas sim focar na criação e implementação da Context API CarrinhoContext.jsx, do hook personalizado useCarrinhoContext, e dos reducers carrinhoReducer.js.
 
-![GIF da aplicação em execução](meteora-app.gif)
+## :dizzy: Tecnologias utilizadas
 
-## 🔨 Funcionalidades do projeto
+<div>
+  <img width="40" src="./public/icons/React-Dark.svg">
+  <img width="40" src="./public/icons/vite.svg">
+  <img width="40" src="./public/icons/JavaScript.svg">
+</div>
 
-Neste estágio inicial de desenvolvimento, o Meteora possui as seguintes funcionalidades:
+## :bricks: Estrutura do Projeto
 
-- Adicionar itens ao carrinho
-- Remover itens do carrinho
-- Visualizar a página do carrinho
-- Deletar itens do carrinho
+### 1. Context API: CarrinhoContext.jsx
+O CarrinhoContext foi criado para fornecer um contexto global para o carrinho de compras, evitando a necessidade de passar props manualmente por diversos níveis da árvore de componentes. Este contexto mantém o estado do carrinho e calcula a quantidade total de itens e o valor total do carrinho.
 
-O [Figma dessa aplicação você encontra aqui](https://www.figma.com/file/R5ATrWK1nC44Eyeo6XZXlr/Meteora---Context-API?node-id=2386%3A2430&mode=dev).
+```js
+import { createContext, useEffect, useMemo, useReducer, useState } from "react";
+import { carrinhoReducer } from "../reducers/carrinhoReducer";
 
-## ✔️ Técnicas e tecnologias utilizadas
+export const CarrinhoContext = createContext();
+CarrinhoContext.displayName = 'Carrinho';
 
-O projeto Meteora utiliza as seguintes tecnologias e bibliotecas:
+const estadoInicial = [];
 
-- `React` - Framework JavaScript
-- `Vite` - Build tool para desenvolvimento rápido
-- `JavaScript` - Linguagem de programação principal
-- `Context API` - Para gerenciamento de estado
-- `useReducer` - Para controle de estado
-- `useMemo` - Para otimização de desempenho
-- `Bootstrap` - Framework de design e componentes
+export const CarrinhoProvider = ({ children }) => {
+    const [carrinho, dispatch] = useReducer(carrinhoReducer, estadoInicial);
+    const [quantidade, setQuantidade] = useState(0);
+    const [valorTotal, setValorTotal] = useState(0);
 
-## 🛠️ Abrir e rodar o projeto
+    const { totalTemp, quantidadeTemp } = useMemo(() => {
+        return carrinho.reduce(
+            (acumulador, produto) => ({ 
+                quantidadeTemp: acumulador.quantidadeTemp + produto.quantidade,
+                totalTemp: acumulador.totalTemp + produto.preco * produto.quantidade,            
+        }),
+            {
+                quantidadeTemp: 0,  
+                totalTemp: 0,
+            }          
+        );
+        
+    }, [carrinho]);
+    
+    useEffect(() => {
+        setQuantidade(quantidadeTemp);
+        setValorTotal(totalTemp);   
+    }, [totalTemp, quantidadeTemp]);
 
-Para executar o projeto Meteora em seu ambiente local, siga estas etapas:
-
-1. Certifique-se de ter o Node.js instalado em sua máquina.
-
-2. Baixe o repositório do projeto:
-
-3. Extraia os arquivos para uma pasta de sua preferência.
-
-4. Navegue até a pasta em questão via terminal (cmd):
-
-```bash
-cd repo-meteora
+    return(      
+        <CarrinhoContext.Provider 
+            value={{ 
+                carrinho,
+                dispatch, 
+                quantidade,  
+                valorTotal, 
+            }}
+        >
+            {children}
+        </CarrinhoContext.Provider>
+    );
+}
 ```
 
-5. Instale as dependências usando o npm:
+### 2. Hook Personalizado: useCarrinhoContext
 
-```bash
-npm install
+O hook useCarrinhoContext encapsula a lógica de manipulação do carrinho, proporcionando uma interface simplificada para os componentes. Ele facilita a adição e remoção de produtos, bem como a alteração da quantidade de itens no carrinho.
+
+```js
+import { useContext } from "react";
+import { CarrinhoContext } from "@/context/CarrinhoContext";
+import { ADD_PRODUTO, REMOVE_PRODUTO, UPDATE_QUANTIDADE } from '../reducers/carrinhoReducer';
+
+const addProdutoAction = (novoProduto) => ({
+    type: ADD_PRODUTO,
+    payload: novoProduto,
+});
+
+const removeProdutoAction = (produtoId) => ({
+    type: REMOVE_PRODUTO,
+    payload: produtoId,
+});
+
+const updateQuantidadeAction = (produtoId, quantidade) => ({
+    type: UPDATE_QUANTIDADE,
+    payload: { produtoId, quantidade },
+});
+
+export const useCarrinhoContext = () => {
+    const { carrinho, dispatch, quantidade, valorTotal } = useContext(CarrinhoContext);
+
+    function adicionarProduto(novoProduto) {
+        dispatch(addProdutoAction(novoProduto));
+    }
+
+    function removerProduto(id) {
+        const produto = carrinho.find((item) => item.id === id);
+        if(produto && produto.quantidade > 1) {
+            dispatch(updateQuantidadeAction(id, produto.quantidade - 1));
+        } else {
+            dispatch(removeProdutoAction(id));
+        }
+    }  
+
+    function removerProdutoCarrinho(id) {
+        dispatch(removeProdutoAction(id));
+    }
+
+    return {
+        carrinho,
+        adicionarProduto,
+        removerProduto,
+        removerProdutoCarrinho,
+        valorTotal,
+        quantidade,
+    };
+}
 ```
 
-6. Inicie o projeto localmente:
+### 3. Reducer: carrinhoReducer.js
 
-```bash
-npm run dev
+O carrinhoReducer é responsável por gerenciar o estado do carrinho de compras. Ele define as ações para adicionar produtos, remover produtos e atualizar a quantidade de itens.
+
+```js
+export const ADD_PRODUTO = "ADD_PRODUTO";
+export const REMOVE_PRODUTO = "REMOVE_PRODUTO";
+export const UPDATE_QUANTIDADE = "UPDATE_QUANTIDADE";
+
+export const carrinhoReducer = (state, action) => {
+    switch (action.type) {
+        case ADD_PRODUTO:
+            const novoProduto = action.payload;
+            const produto = state.findIndex((item) => item.id === novoProduto.id);
+            if (produto === -1) {
+                novoProduto.quantidade = 1;
+                return [...state, novoProduto];
+            } else {
+                return state.map((item, index) =>
+                    index === produto
+                        ? { ...item, quantidade: item.quantidade + 1 }
+                        : item
+                );
+            }
+        case REMOVE_PRODUTO:
+            const produtoId = action.payload;
+            return state.filter((item) => item.id !== produtoId);
+
+        case UPDATE_QUANTIDADE:
+            const { produtoId: id, quantidade } = action.payload;
+            return state.map((item) =>
+                item.id === id ? { ...item, quantidade } : item
+            );
+
+        default:
+            return state;
+    }
+};
 ```
+## :warning: Instalação
 
-7. Abra seu navegador e acesse a url exibida no seu terminal para visualizar o projeto.
+### :dvd: Passo a Passo
 
-## 📚 Mais informações do projeto
+1. Clone o repositório:
 
-O Meteora é um e-commerce fictício de moda em constante desenvolvimento. Este projeto visa aprimorar as habilidades em React, e apresentar a Context API como uma solução para gerenciamento de estados globais de uma aplicação React.
+   ```bash
+   git clone https://github.com/charlesbrcosta/ContextApi_Reducer_Hooks.git
+   cd ContextApi_Reducer_Hooks
 
-O design e protótipo deste projeto podem ser encontrados [aqui](https://www.figma.com/file/R5ATrWK1nC44Eyeo6XZXlr/Meteora---Context-API?node-id=2386%3A2430&mode=dev).
+2. Instale as dependências:
+    ```bash
+    npm install ou npm i
 
-Aproveite o desenvolvimento e aprimoramento do Meteora!
+3. Inicie o servidor de desenvolvimento:
+    ```bash
+    npm run dev
+
+## Conclusão
+
+Este projeto demonstra a aplicação da Context API, hooks personalizados, e reducers em um cenário de carrinho de compras. A Context API CarrinhoContext evita o problema de prop drilling, o hook useCarrinhoContext encapsula a lógica do carrinho e facilita a interação com o estado, e o carrinhoReducer gerencia eficientemente as ações do carrinho.
+
+## :handshake: Contribuição
+
+Se você quiser contribuir com o projeto, siga os passos abaixo:
+
+    Faça um fork deste repositório.
+    Crie uma nova branch (git checkout -b feature/nova-feature).
+    Faça commit das suas alterações (git commit -am 'Adiciona nova feature').
+    Faça push para a branch (git push origin feature/nova-feature).
+    Abra um Pull Request.
+
+## :student: Autor
+
+[<img loading="lazy" src="https://avatars.githubusercontent.com/u/48035699?v=4" width=115><br><sub>Charles Bruno</sub>](https://github.com/charlesbrcosta)
+
+
+## :page_facing_up: Licença
+
+Este projeto está licenciado sob a [Licença MIT](https://www.mit.edu/~amini/LICENSE.md).
