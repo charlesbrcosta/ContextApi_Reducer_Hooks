@@ -4,7 +4,7 @@ import Botao from "@/components/Botao";
 import { useNavigate } from "react-router-dom";
 import { useCarrinhoContext } from "../../../hooks/useCarrinhoContext";
 
-const TotalCarrinho = (/* { valorTotalCarrinho } */) => {
+const TotalCarrinho = () => {
   const navigate = useNavigate();
   const { valorTotal } = useCarrinhoContext();
 
